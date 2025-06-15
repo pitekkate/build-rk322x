@@ -2,8 +2,6 @@ name: Build and Release RK322x Components
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *' # Jalankan setiap hari pada tengah malam UTC
 
 jobs:
   build-release:
@@ -23,18 +21,6 @@ jobs:
           git bash bc bison flex libssl-dev make libc6-dev libncurses5-dev \
           crossbuild-essential-armhf debootstrap qemu-user-static device-tree-compiler \
           gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
-        
-    - name: Prepare Armbian build
-      run: |
-        ./compile.sh BOARD=rk322x-box \
-          BRANCH=current \
-          RELEASE=jammy \
-          BUILD_MINIMAL=yes \
-          BUILD_DESKTOP=no \
-          KERNEL_ONLY=yes \
-          KERNEL_CONFIGURE=no \
-          CLEAN_LEVEL="make,debs" \
-          prepare
         
     - name: Build U-Boot and Kernel
       run: |
@@ -66,6 +52,8 @@ jobs:
         echo "Generated on $(date)" >> artifacts/README.md
         echo "" >> artifacts/README.md
         echo "Contains U-Boot, Kernel and Overlay files for RK322x devices." >> artifacts/README.md
+        echo "Files:" >> artifacts/README.md
+        ls -la artifacts/rk322x/ >> artifacts/README.md
         
     - name: Create release
       uses: softprops/action-gh-release@v1
