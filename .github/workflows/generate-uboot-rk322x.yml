@@ -18,6 +18,17 @@ jobs:
         repository: pitekkate/build-rk322x
         ref: main
 
+    - name: Verify Repository Structure
+      run: |
+        ls -la
+        echo "Checking for u-boot directory..."
+        if [ ! -d "u-boot" ]; then
+          echo "ERROR: u-boot directory not found!"
+          echo "Contents of repository:"
+          ls -R
+          exit 1
+        fi
+
     - name: Install Dependencies
       run: |
         apt-get update
@@ -27,14 +38,14 @@ jobs:
           swig python3-dev bison flex
 
     - name: Build U-Boot
+      working-directory: ./u-boot
       run: |
-        cd u-boot
         make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- rk322x_defconfig
         make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc)
 
     - name: Generate idbloader.img
+      working-directory: ./u-boot
       run: |
-        cd u-boot
         tools/mkimage -n rk322x -T rksd -d ../rkbin/bin/rk32/rk322x_ddr_333MHz_v1.10.bin:idbloader.img
         cat spl/u-boot-spl.bin >> idbloader.img
 
@@ -43,7 +54,6 @@ jobs:
         mkdir -p rk322x-uboot
         cp u-boot/idbloader.img u-boot/u-boot.itb rk322x-uboot/
         
-        # Create build info
         cat > rk322x-uboot/BUILD_INFO <<EOF
         Build Repository: pitekkate/build-rk322x
         Commit: $(git rev-parse HEAD)
@@ -51,11 +61,10 @@ jobs:
         Toolchain: arm-linux-gnueabihf
         EOF
         
-        # Create archive
         tar -czvf rk322x-uboot.tar.gz -C rk322x-uboot .
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: rk322x-uboot
         path: rk322x-uboot.tar.gz
