@@ -2,6 +2,8 @@ name: Build and Release RK322x Components
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Run daily at midnight UTC
 
 jobs:
   build-release:
@@ -24,12 +26,10 @@ jobs:
         
     - name: Build U-Boot and Kernel
       run: |
-        ./compile.sh BOARD=rk322x-box \
-          BRANCH=current \
-          RELEASE=jammy \
+        # New command structure for Armbian
+        ./compile.sh kernel BOARD=rk322x-box BRANCH=current \
           BUILD_MINIMAL=yes \
           BUILD_DESKTOP=no \
-          KERNEL_ONLY=yes \
           KERNEL_CONFIGURE=no \
           CLEAN_LEVEL="make,debs"
         
