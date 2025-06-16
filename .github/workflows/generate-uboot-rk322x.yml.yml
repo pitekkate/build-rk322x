@@ -1,0 +1,61 @@
+name: Build RK322x U-Boot
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        repository: pitekkate/build-rk322x
+        ref: main
+
+    - name: Install Dependencies
+      run: |
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          git make gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu \
+          device-tree-compiler u-boot-tools python3 libssl-dev \
+          swig python3-dev bison flex
+
+    - name: Build U-Boot
+      run: |
+        cd u-boot
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- rk322x_defconfig
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc)
+
+    - name: Generate idbloader.img
+      run: |
+        cd u-boot
+        tools/mkimage -n rk322x -T rksd -d ../rkbin/bin/rk32/rk322x_ddr_333MHz_v1.10.bin:idbloader.img
+        cat spl/u-boot-spl.bin >> idbloader.img
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir -p rk322x-uboot
+        cp u-boot/idbloader.img u-boot/u-boot.itb rk322x-uboot/
+        
+        # Create build info
+        cat > rk322x-uboot/BUILD_INFO <<EOF
+        Build Repository: pitekkate/build-rk322x
+        Commit: $(git rev-parse HEAD)
+        Build Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        Toolchain: arm-linux-gnueabihf
+        EOF
+        
+        # Create archive
+        tar -czvf rk322x-uboot.tar.gz -C rk322x-uboot .
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rk322x-uboot
+        path: rk322x-uboot.tar.gz
