@@ -26,14 +26,24 @@ jobs:
           device-tree-compiler u-boot-tools python3 libssl-dev \
           swig python3-dev bison flex
 
-    - name: Clone U-Boot Source
+    - name: Clone U-Boot with RK322x Support
       run: |
-        git clone https://github.com/u-boot/u-boot.git
+        git clone https://github.com/rockchip-linux/u-boot.git -b rk322x
         cd u-boot
-        git checkout v2023.10  # Gunakan versi stabil
+        git checkout 7a8bc15  # Commit yang diketahui support RK322x
 
     - name: Clone RK Binaries
       run: git clone https://github.com/rockchip-linux/rkbin.git
+
+    - name: Verify Defconfig
+      run: |
+        cd u-boot
+        if [ ! -f "configs/rk322x_defconfig" ]; then
+          echo "::error::rk322x_defconfig not found!"
+          echo "Available defconfigs:"
+          ls configs/ | grep rk
+          exit 1
+        fi
 
     - name: Build U-Boot
       working-directory: ./u-boot
@@ -53,9 +63,8 @@ jobs:
         cp u-boot/idbloader.img u-boot/u-boot.itb rk322x-uboot/
         
         cat > rk322x-uboot/BUILD_INFO <<EOF
-        Build Repository: pitekkate/build-rk322x (with external sources)
-        U-Boot Version: v2023.10
-        Commit: $(git -C u-boot rev-parse HEAD)
+        U-Boot Source: rockchip-linux/u-boot (rk322x branch)
+        RK Binaries: rockchip-linux/rkbin
         Build Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
         Toolchain: arm-linux-gnueabihf
         EOF
