@@ -14,9 +14,6 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-      with:
-        repository: pitekkate/build-rk322x
-        ref: main
 
     - name: Install Dependencies
       run: |
@@ -28,32 +25,44 @@ jobs:
 
     - name: Clone U-Boot with RK322x Support
       run: |
-        git clone https://github.com/rockchip-linux/u-boot.git -b rk322x
+        git clone https://github.com/rockchip-linux/u-boot.git
         cd u-boot
-        git checkout 7a8bc15  # Commit yang diketahui support RK322x
+        git checkout release-2023.07-rockchip  # Gunakan branch/tag yang support RK322x
 
     - name: Clone RK Binaries
       run: git clone https://github.com/rockchip-linux/rkbin.git
 
-    - name: Verify Defconfig
+    - name: Find RK322x Defconfig
+      working-directory: ./u-boot
       run: |
-        cd u-boot
-        if [ ! -f "configs/rk322x_defconfig" ]; then
-          echo "::error::rk322x_defconfig not found!"
-          echo "Available defconfigs:"
-          ls configs/ | grep rk
+        echo "Available Rockchip defconfigs:"
+        ls configs/ | grep -i rk
+        echo "Trying to find RK322x config..."
+        if ! ls configs/*rk322* 2>/dev/null; then
+          echo "::error::No RK322x defconfig found!"
           exit 1
         fi
 
     - name: Build U-Boot
       working-directory: ./u-boot
       run: |
-        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- rk322x_defconfig
+        # Coba defconfig yang mungkin cocok untuk RK322x
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- evb-rk3229_defconfig || \
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- rk322x_defconfig || \
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- rockchip_rk322x_defconfig
+        
         make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc)
 
     - name: Generate idbloader.img
       working-directory: ./u-boot
       run: |
+        # Pastikan file DDR init ada
+        if [ ! -f "../rkbin/bin/rk32/rk322x_ddr_333MHz_v1.10.bin" ]; then
+          echo "::error::DDR init binary not found!"
+          ls ../rkbin/bin/rk32/
+          exit 1
+        fi
+        
         tools/mkimage -n rk322x -T rksd -d ../rkbin/bin/rk32/rk322x_ddr_333MHz_v1.10.bin:idbloader.img
         cat spl/u-boot-spl.bin >> idbloader.img
 
@@ -63,10 +72,11 @@ jobs:
         cp u-boot/idbloader.img u-boot/u-boot.itb rk322x-uboot/
         
         cat > rk322x-uboot/BUILD_INFO <<EOF
-        U-Boot Source: rockchip-linux/u-boot (rk322x branch)
+        U-Boot Source: rockchip-linux/u-boot (release-2023.07-rockchip)
         RK Binaries: rockchip-linux/rkbin
         Build Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
         Toolchain: arm-linux-gnueabihf
+        Defconfig Used: $(cat u-boot/.config | grep CONFIG_DEFCONFIG | cut -d'"' -f2)
         EOF
         
         tar -czvf rk322x-uboot.tar.gz -C rk322x-uboot .
