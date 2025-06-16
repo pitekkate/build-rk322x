@@ -22,7 +22,8 @@ jobs:
         sudo apt-get install -y \
           git bash bc bison flex libssl-dev make libc6-dev libncurses5-dev \
           crossbuild-essential-armhf debootstrap qemu-user-static device-tree-compiler \
-          gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+          gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
+          lsb-release
         
     - name: Build U-Boot and Kernel
       run: |
@@ -33,33 +34,47 @@ jobs:
           KERNEL_CONFIGURE=no \
           CLEAN_LEVEL="make,debs"
         
-    - name: Collect artifacts
+    - name: Find and collect artifacts
       run: |
         mkdir -p artifacts/rk322x
-        # Copy U-Boot files
-        cp output/debs/linux-u-boot-*rk322x-box*.deb artifacts/rk322x/
-        cp output/debs/linux-dtb-*rk322x-box*.deb artifacts/rk322x/
         
-        # Copy Kernel files
-        cp output/debs/linux-headers-*.deb artifacts/rk322x/
-        cp output/debs/linux-image-*.deb artifacts/rk322x/
+        # Find and copy all relevant files with error handling
+        echo "Searching for build artifacts..."
         
-        # Copy overlay files if available
-        cp -r output/images/overlay-user/* artifacts/rk322x/ || echo "No overlay files found"
+        # U-Boot files
+        find output -name 'linux-u-boot-*rk322x-box*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No U-Boot files found"
+        find output -name 'linux-dtb-*rk322x-box*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No DTB files found"
         
-        # Create a simple README
-        echo "RK322x Components from Armbian Build" > artifacts/README.md
+        # Kernel files
+        find output -name 'linux-headers-*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No headers found"
+        find output -name 'linux-image-*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No image found"
+        
+        # Overlay files
+        find output -type d -name 'overlay-user' -exec cp -r {}/. artifacts/rk322x/ \; || echo "No overlay files found"
+        
+        # List collected files
+        echo "Collected artifacts:"
+        ls -la artifacts/rk322x/
+        
+        # Create a detailed README
+        echo "# RK322x Components from Armbian Build" > artifacts/README.md
         echo "Generated on $(date)" >> artifacts/README.md
         echo "" >> artifacts/README.md
-        echo "Contains U-Boot, Kernel and Overlay files for RK322x devices." >> artifacts/README.md
-        echo "Files:" >> artifacts/README.md
-        ls -la artifacts/rk322x/ >> artifacts/README.md
+        echo "## Build Parameters" >> artifacts/README.md
+        echo "- BOARD: rk322x-box" >> artifacts/README.md
+        echo "- BRANCH: current" >> artifacts/README.md
+        echo "- BUILD_MINIMAL: yes" >> artifacts/README.md
+        echo "- KERNEL_CONFIGURE: no" >> artifacts/README.md
+        echo "" >> artifacts/README.md
+        echo "## Included Files" >> artifacts/README.md
+        ls -1 artifacts/rk322x/ | sed 's/^/- /' >> artifacts/README.md
         
     - name: Create release
+      if: success() && steps.collect.outcome == 'success'
       uses: softprops/action-gh-release@v1
       with:
         name: RK322x Components $(date +'%Y-%m-%d')
-        body: "Automated build of U-Boot, Kernel and Overlay for RK322x devices from Armbian build"
+        body: "Automated build of U-Boot, Kernel and Overlay for RK322x devices from Armbian build\n\n$(cat artifacts/README.md)"
         tag_name: rk322x-$(date +'%Y%m%d')
         files: |
           artifacts/rk322x/*
