@@ -25,6 +25,10 @@ jobs:
           gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
           lsb-release
         
+    - name: Get current date
+      id: date
+      run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+        
     - name: Build U-Boot and Kernel
       run: |
         ./compile.sh kernel BOARD=rk322x-box BRANCH=current \
@@ -40,13 +44,13 @@ jobs:
         
         echo "Searching for build artifacts..."
         
-        # Find and copy all kernel packages (new format)
+        # Find and copy all kernel packages
         find output -name 'linux-*-current-rockchip_*.deb' -exec cp -v {} artifacts/rk322x/ \;
         
-        # Find and copy U-Boot packages (new format)
+        # Find and copy U-Boot packages
         find output -name 'linux-u-boot-*rk322x*.deb' -exec cp -v {} artifacts/rk322x/ \;
         
-        # Find and copy DTB packages (new format)
+        # Find and copy DTB packages
         find output -name 'linux-dtb-*rk322x*.deb' -exec cp -v {} artifacts/rk322x/ \;
         
         # Find and copy hashed kernel package
@@ -56,7 +60,7 @@ jobs:
         echo "Collected artifacts:"
         ls -la artifacts/rk322x/
         
-        # Create README
+        # Create README with bykangris credit
         echo "# RK322x Components from Armbian Build" > artifacts/README.md
         echo "Generated on $(date)" >> artifacts/README.md
         echo "" >> artifacts/README.md
@@ -65,6 +69,9 @@ jobs:
         echo "- BRANCH: current" >> artifacts/README.md
         echo "- BUILD_MINIMAL: yes" >> artifacts/README.md
         echo "- KERNEL_CONFIGURE: no" >> artifacts/README.md
+        echo "" >> artifacts/README.md
+        echo "## Credits" >> artifacts/README.md
+        echo "- Build automation by bykangris" >> artifacts/README.md
         echo "" >> artifacts/README.md
         echo "## Included Files" >> artifacts/README.md
         ls -1 artifacts/rk322x/ | sed 's/^/- /' >> artifacts/README.md
@@ -76,9 +83,20 @@ jobs:
       if: steps.collect.outputs.artifact_count > 0
       uses: softprops/action-gh-release@v1
       with:
-        name: RK322x Components $(date +'%Y-%m-%d')
-        body: "Automated build of RK322x components from Armbian\n\n$(cat artifacts/README.md)"
-        tag_name: rk322x-$(date +'%Y%m%d')
+        name: RK322x Components ${{ steps.date.outputs.date }} (by bykangris)
+        body: |
+          Automated build of RK322x components from Armbian
+          
+          ### Build Details
+          - Board: rk322x-box
+          - Branch: current
+          - Date: ${{ steps.date.outputs.date }}
+          
+          ### Credits
+          Build automation by [bykangris](https://github.com/bykangris)
+          
+          $(cat artifacts/README.md)
+        tag_name: rk322x-${{ steps.date.outputs.date }}
         files: |
           artifacts/rk322x/*
           artifacts/README.md
