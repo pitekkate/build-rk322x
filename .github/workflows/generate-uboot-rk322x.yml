@@ -21,10 +21,9 @@ jobs:
     - name: Verify Repository Structure
       run: |
         ls -la
-        echo "Checking for u-boot directory..."
         if [ ! -d "u-boot" ]; then
-          echo "ERROR: u-boot directory not found!"
-          echo "Contents of repository:"
+          echo "::error::u-boot directory not found!"
+          echo "Repository contents:"
           ls -R
           exit 1
         fi
@@ -64,7 +63,8 @@ jobs:
         tar -czvf rk322x-uboot.tar.gz -C rk322x-uboot .
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rk322x-uboot
         path: rk322x-uboot.tar.gz
+        retention-days: 5
