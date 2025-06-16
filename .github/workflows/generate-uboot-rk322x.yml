@@ -18,16 +18,6 @@ jobs:
         repository: pitekkate/build-rk322x
         ref: main
 
-    - name: Verify Repository Structure
-      run: |
-        ls -la
-        if [ ! -d "u-boot" ]; then
-          echo "::error::u-boot directory not found!"
-          echo "Repository contents:"
-          ls -R
-          exit 1
-        fi
-
     - name: Install Dependencies
       run: |
         apt-get update
@@ -35,6 +25,15 @@ jobs:
           git make gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu \
           device-tree-compiler u-boot-tools python3 libssl-dev \
           swig python3-dev bison flex
+
+    - name: Clone U-Boot Source
+      run: |
+        git clone https://github.com/u-boot/u-boot.git
+        cd u-boot
+        git checkout v2023.10  # Gunakan versi stabil
+
+    - name: Clone RK Binaries
+      run: git clone https://github.com/rockchip-linux/rkbin.git
 
     - name: Build U-Boot
       working-directory: ./u-boot
@@ -54,8 +53,9 @@ jobs:
         cp u-boot/idbloader.img u-boot/u-boot.itb rk322x-uboot/
         
         cat > rk322x-uboot/BUILD_INFO <<EOF
-        Build Repository: pitekkate/build-rk322x
-        Commit: $(git rev-parse HEAD)
+        Build Repository: pitekkate/build-rk322x (with external sources)
+        U-Boot Version: v2023.10
+        Commit: $(git -C u-boot rev-parse HEAD)
         Build Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
         Toolchain: arm-linux-gnueabihf
         EOF
