@@ -27,7 +27,6 @@ jobs:
         
     - name: Build U-Boot and Kernel
       run: |
-        # New command structure for Armbian
         ./compile.sh kernel BOARD=rk322x-box BRANCH=current \
           BUILD_MINIMAL=yes \
           BUILD_DESKTOP=no \
@@ -35,28 +34,29 @@ jobs:
           CLEAN_LEVEL="make,debs"
         
     - name: Find and collect artifacts
+      id: collect
       run: |
         mkdir -p artifacts/rk322x
         
-        # Find and copy all relevant files with error handling
         echo "Searching for build artifacts..."
         
-        # U-Boot files
-        find output -name 'linux-u-boot-*rk322x-box*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No U-Boot files found"
-        find output -name 'linux-dtb-*rk322x-box*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No DTB files found"
+        # Find and copy all kernel packages (new format)
+        find output -name 'linux-*-current-rockchip_*.deb' -exec cp -v {} artifacts/rk322x/ \;
         
-        # Kernel files
-        find output -name 'linux-headers-*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No headers found"
-        find output -name 'linux-image-*.deb' -exec cp {} artifacts/rk322x/ \; || echo "No image found"
+        # Find and copy U-Boot packages (new format)
+        find output -name 'linux-u-boot-*rk322x*.deb' -exec cp -v {} artifacts/rk322x/ \;
         
-        # Overlay files
-        find output -type d -name 'overlay-user' -exec cp -r {}/. artifacts/rk322x/ \; || echo "No overlay files found"
+        # Find and copy DTB packages (new format)
+        find output -name 'linux-dtb-*rk322x*.deb' -exec cp -v {} artifacts/rk322x/ \;
+        
+        # Find and copy hashed kernel package
+        find output/packages-hashed -name 'kernel-rockchip-*.tar' -exec cp -v {} artifacts/rk322x/ \;
         
         # List collected files
         echo "Collected artifacts:"
         ls -la artifacts/rk322x/
         
-        # Create a detailed README
+        # Create README
         echo "# RK322x Components from Armbian Build" > artifacts/README.md
         echo "Generated on $(date)" >> artifacts/README.md
         echo "" >> artifacts/README.md
@@ -69,12 +69,15 @@ jobs:
         echo "## Included Files" >> artifacts/README.md
         ls -1 artifacts/rk322x/ | sed 's/^/- /' >> artifacts/README.md
         
+        # Set output for release step
+        echo "artifact_count=$(ls -1 artifacts/rk322x/ | wc -l)" >> $GITHUB_OUTPUT
+        
     - name: Create release
-      if: success() && steps.collect.outcome == 'success'
+      if: steps.collect.outputs.artifact_count > 0
       uses: softprops/action-gh-release@v1
       with:
         name: RK322x Components $(date +'%Y-%m-%d')
-        body: "Automated build of U-Boot, Kernel and Overlay for RK322x devices from Armbian build\n\n$(cat artifacts/README.md)"
+        body: "Automated build of RK322x components from Armbian\n\n$(cat artifacts/README.md)"
         tag_name: rk322x-$(date +'%Y%m%d')
         files: |
           artifacts/rk322x/*
