@@ -55,7 +55,7 @@ jobs:
         tar -czvf rk322x-uboot.tar.gz -C rk322x-uboot .
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: rk322x-uboot
         path: rk322x-uboot.tar.gz
