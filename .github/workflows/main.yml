@@ -23,25 +23,13 @@ on:
           - legacy
           - vendor
           - media
-      clean:
-        description: 'Clean Level'
-        required: false
-        default: 'make,debs'
-        type: choice
-        options:
-          - none
-          - make
-          - debs
-          - alldebs
-          - make,debs
-          - make,alldebs
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Gunakan versi LTS stabil
-    # container: 
-    #   image: armbian/build:latest  # Opsi 1: uncomment untuk gunakan container
-    #   options: --privileged -v /proc:/proc -v /sys:/sys
+    runs-on: ubuntu-latest
+    container:
+      image: armbian/build:latest
+      options: --privileged -v /proc:/proc -v /sys:/sys
 
     steps:
     - name: Checkout Branch ssv6158
@@ -51,60 +39,32 @@ jobs:
         submodules: recursive
         path: build
 
-    - name: Fix Dependencies
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y apt-utils software-properties-common
-        sudo add-apt-repository -y universe
-        sudo apt-get update -qq
-        
-        # Perbaikan khusus untuk gcc-arm
-        sudo apt-get install -y binutils binutils-common binutils-aarch64-linux-gnu \
-          binutils-arm-linux-gnueabihf build-essential
-
-    - name: Install Build Tools
-      run: |
-        sudo apt-get install -y -qq \
-          docker.io \
-          git make bash \
-          bc bison flex libssl-dev \
-          libncurses-dev \
-          gcc-aarch64-linux-gnu \
-          gcc-arm-linux-gnueabihf \
-          wget ca-certificates \
-          || (echo "Retrying with fix..." && sudo apt-get -f install -y && sudo apt-get install -y -qq \
-              docker.io \
-              git make bash \
-              bc bison flex libssl-dev \
-              libncurses-dev \
-              gcc-aarch64-linux-gnu \
-              gcc-arm-linux-gnueabihf \
-              wget ca-certificates)
-
-    - name: Start Docker Service
-      run: sudo systemctl start docker
-
-    - name: Configure Build
+    - name: Configure Build Parameters
       run: |
         cd build
         echo "BOARD=rk322x-box" >> $GITHUB_ENV
         echo "BRANCH=${{ github.event.inputs.kernel || 'current' }}" >> $GITHUB_ENV
         echo "RELEASE=${{ github.event.inputs.release || 'jammy' }}" >> $GITHUB_ENV
-        echo "CLEAN=${{ github.event.inputs.clean || 'make,debs' }}" >> $GITHUB_ENV
+        echo "CLEAN=make,debs" >> $GITHUB_ENV
+
+        # Special flags for kernels
+        if [[ "${{ github.event.inputs.kernel }}" == "vendor" ]]; then
+          echo "KERNEL_CONFIGURE=no" >> $GITHUB_ENV
+        else
+          echo "KERNEL_CONFIGURE=yes" >> $GITHUB_ENV
+        fi
 
     - name: Build Image
       run: |
         cd build
-        sudo ./compile.sh \
-          docker \
+        ./compile.sh \
           BOARD=${{ env.BOARD }} \
           BRANCH=${{ env.BRANCH }} \
           RELEASE=${{ env.RELEASE }} \
           BUILD_MINIMAL=no \
           BUILD_DESKTOP=no \
           KERNEL_ONLY=no \
-          KERNEL_CONFIGURE=yes \
-          EXTRAWIFI=yes \
+          KERNEL_CONFIGURE=${{ env.KERNEL_CONFIGURE }} \
           CLEAN_LEVEL="${{ env.CLEAN }}"
 
     - name: Upload Image
