@@ -1,0 +1,162 @@
+name: Build Armbian for RK3229 with SSV6158
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  # Daily build at midnight UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Checkout Armbian
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        path: build
+
+    - name: Setup Build Environment
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq \
+          docker.io \
+          git make bash \
+          bc bison flex libssl-dev \
+          libncurses-dev \
+          gcc-aarch64-linux-gnu \
+          wget
+
+    - name: Configure Custom Components
+      run: |
+        cd build
+        
+        # 1. Board configuration for SSV6158
+        cat >> config/boards/rk322x-box.conf << 'EOF'
+        
+        # SSV6158 WiFi support
+        function post_config_kernel() {
+            [[ $BRANCH == "current" ]] && {
+                kernel_config_set_m CONFIG_WLAN_VENDOR_SSV y
+                kernel_config_set_m CONFIG_SSV6051 m
+            }
+        }
+        
+        # Add custom firmware package
+        IMAGE_PACKAGES="$IMAGE_PACKAGES firmware-ssv6051"
+        EOF
+        
+        # 2. Create firmware directory
+        mkdir -p packages/extras/firmware/ssv6051
+        
+        # 3. Download firmware (replace with actual sources if needed)
+        wget -O packages/extras/firmware/ssv6051/ssv6051-sw.bin \
+          https://raw.githubusercontent.com/armbian/firmware/master/ssv6051/ssv6051-sw.bin
+        wget -O packages/extras/firmware/ssv6051/ssv6051-wifi.cfg \
+          https://raw.githubusercontent.com/armbian/firmware/master/ssv6051/ssv6051-wifi.cfg
+        
+        # 4. Create Debian package control files
+        mkdir -p packages/extras/firmware/debian
+        cat > packages/extras/firmware/debian/control << 'EOF'
+        Package: firmware-ssv6051
+        Version: 1.0
+        Architecture: all
+        Maintainer: Armbian Builder <builder@armbian.com>
+        Description: Firmware for SSV6051 WiFi module
+        EOF
+        
+        cat > packages/extras/firmware/debian/install << 'EOF'
+        ssv6051-sw.bin /lib/firmware/ssv6051/
+        ssv6051-wifi.cfg /lib/firmware/ssv6051/
+        EOF
+        
+        # 5. Register custom package
+        echo "firmware-ssv6051" >> config/cli/common/main/packages
+        
+        # 6. Create module loading script
+        mkdir -p packages/extras/scripts
+        cat > packages/extras/scripts/ssv6051-init.sh << 'EOF'
+        #!/bin/bash
+        # Load SSV6051 module at boot
+        modprobe ssv6051
+        EOF
+        
+        chmod +x packages/extras/scripts/ssv6051-init.sh
+        
+        # 7. Create systemd service
+        cat > packages/extras/scripts/ssv6051-module.service << 'EOF'
+        [Unit]
+        Description=Load SSV6051 WiFi Module
+        After=network.target
+        
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/ssv6051-init.sh
+        
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+        
+        # 8. Add installation script
+        cat > packages/extras/scripts/debian-install.sh << 'EOF'
+        #!/bin/bash
+        # Install SSV6051 components
+        cp ssv6051-init.sh /usr/bin/
+        cp ssv6051-module.service /lib/systemd/system/
+        systemctl enable ssv6051-module.service
+        EOF
+        
+        chmod +x packages/extras/scripts/debian-install.sh
+        
+        # 9. Create package for init script
+        mkdir -p packages/extras/ssv-init/debian
+        cat > packages/extras/ssv-init/debian/control << 'EOF'
+        Package: ssv6051-init
+        Version: 1.0
+        Architecture: all
+        Maintainer: Armbian Builder <builder@armbian.com>
+        Depends: systemd
+        Description: SSV6051 WiFi module loader
+        EOF
+        
+        cat > packages/extras/ssv-init/debian/install << 'EOF'
+        debian-install.sh /DEBIAN/
+        ssv6051-init.sh /usr/bin/
+        ssv6051-module.service /lib/systemd/system/
+        EOF
+        
+        # 10. Add init package to build
+        echo "ssv6051-init" >> config/cli/common/main/packages
+
+    - name: Start Docker Service
+      run: sudo systemctl start docker
+
+    - name: Build Image
+      run: |
+        cd build
+        sudo ./compile.sh \
+          docker \
+          BOARD=rk322x-box \
+          BRANCH=current \
+          RELEASE=jammy \
+          BUILD_MINIMAL=no \
+          BUILD_DESKTOP=no \
+          KERNEL_ONLY=no \
+          KERNEL_CONFIGURE=yes \
+          EXTRAWIFI=yes
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: armbian-rk3229-ssv6158
+        path: build/output/images/*.img
+        retention-days: 7
+
+    - name: Upload Build Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: build/output/debug/*.log
+        retention-days: 3
