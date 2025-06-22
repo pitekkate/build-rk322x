@@ -1,0 +1,91 @@
+name: Manual Build Armbian RK3229 + SSV6158
+
+on:
+  workflow_dispatch:   # HANYA manual trigger
+    inputs:
+      release:
+        description: 'OS Release (jammy, bookworm, bullseye)'
+        required: true
+        default: 'jammy'
+        type: choice
+        options:
+          - jammy
+          - bookworm
+          - bullseye
+      kernel:
+        description: 'Kernel Branch'
+        required: true
+        default: 'current'
+        type: choice
+        options:
+          - current
+          - legacy
+      clean:
+        description: 'Clean Level (none, make, debs, alldebs)'
+        required: false
+        default: 'make,debs'
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Checkout Branch ssv6158
+      uses: actions/checkout@v4
+      with:
+        ref: ssv6158  # NAMA BRANCH ANDA
+        submodules: recursive
+        path: build
+
+    - name: Setup Build Environment
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq \
+          docker.io \
+          git make bash \
+          bc bison flex libssl-dev \
+          libncurses-dev \
+          gcc-aarch64-linux-gnu \
+          wget
+
+    - name: Start Docker Service
+      run: sudo systemctl start docker
+
+    - name: Configure Parameters
+      run: |
+        echo "BOARD=rk322x-box" >> $GITHUB_ENV
+        echo "BRANCH=${{ github.event.inputs.kernel || 'current' }}" >> $GITHUB_ENV
+        echo "RELEASE=${{ github.event.inputs.release || 'jammy' }}" >> $GITHUB_ENV
+        echo "CLEAN=${{ github.event.inputs.clean || 'make,debs' }}" >> $GITHUB_ENV
+
+    - name: Build Image
+      run: |
+        cd build
+        sudo ./compile.sh \
+          docker \
+          BOARD=${{ env.BOARD }} \
+          BRANCH=${{ env.BRANCH }} \
+          RELEASE=${{ env.RELEASE }} \
+          BUILD_MINIMAL=no \
+          BUILD_DESKTOP=no \
+          KERNEL_ONLY=no \
+          KERNEL_CONFIGURE=yes \
+          EXTRAWIFI=yes \
+          CLEAN_LEVEL="${{ env.CLEAN }}"
+
+    - name: Upload Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: armbian-${{ env.BOARD }}-${{ env.BRANCH }}-${{ env.RELEASE }}
+        path: build/output/images/*.img
+        retention-days: 7
+
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: build/output/logs
+        retention-days: 3
