@@ -5,27 +5,11 @@ on:
     inputs:
       kernel_branch:
         type: choice
-        description: 'Pilih versi kernel'
+        description: 'Pilih versi kernel yang akan dibangun'
         options:
           - current
           - legacy
         default: current
-      os_release:
-        type: choice
-        description: 'Pilih rilis Ubuntu/Debian'
-        options:
-          - jammy
-          - noble
-          - focal
-          - bookworm
-        default: noble
-      build_desktop:
-        type: choice
-        description: 'Aktifkan build Desktop Environment?'
-        options:
-          - yes
-          - no
-        default: no
 
 jobs:
   build:
@@ -39,64 +23,16 @@ jobs:
           repository: pitekkate/build-rk322x
           ref: hk1mini
 
-      - name: Buat direktori config jika belum ada
-        run: |
-          mkdir -p config/targets
-
-      - name: Cek apakah file konfigurasi tersedia
-        id: check_conf
-        run: |
-          if [ -f config/targets/hk1mini.conf ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Buat hk1mini.conf otomatis jika tidak ada
-        if: steps.check_conf.outputs.exists == 'false'
-        run: |
-          cat > config/targets/hk1mini.conf <<EOL
-BOARD=hk1mini
-RELEASE=${{ inputs.os_release }}
-BUILD_MINIMAL=no
-BUILD_DESKTOP=no
-CUSTOMIZE_IMAGE=yes
-IMAGE_SIZE=1GB
-KERNEL_TARGET=${{ inputs.kernel_branch }}
-ENABLE_ROOT=true
-ENABLE_E2FSCK=y
-DISABLE_ROOT_RESIZE=false
-CLEAN_LEVEL="make,debs"
-EOL
-
-      - name: Set OS Release di config/targets/hk1mini.conf
-        run: |
-          if grep -q "^RELEASE=" config/targets/hk1mini.conf; then
-            sed -i "s/^RELEASE=.*/RELEASE=${{ inputs.os_release }}/" config/targets/hk1mini.conf
-          else
-            echo "RELEASE=${{ inputs.os_release }}" >> config/targets/hk1mini.conf
-          fi
-
-      - name: Set BUILD_DESKTOP based on input
-        if: ${{ inputs.build_desktop == 'yes' }}
-        run: |
-          if grep -q "^BUILD_DESKTOP=" config/targets/hk1mini.conf; then
-            sed -i "s/^BUILD_DESKTOP=no/BUILD_DESKTOP=yes/" config/targets/hk1mini.conf
-          else
-            echo "BUILD_DESKTOP=yes" >> config/targets/hk1mini.conf
-          fi
-
-      - name: Setup Environment untuk Build Armbian (Non-Interactive)
+      - name: Setup Environment untuk Build Armbian
         uses: armbian/build@main
-        env:
-          ARMBIAN_NONINTERACTIVE: true
         with:
           armbian_token: "${{ secrets.GITHUB_TOKEN }}"
+          armbian_release: noble
           armbian_target: image
           armbian_board: hk1mini
           armbian_kernel_branch: ${{ inputs.kernel_branch }}
-          armbian_release: ${{ inputs.os_release }}
-          armbian_branch: master
+          # Tambahkan opsi lain jika perlu
+          armbian_branch: master  # atau main, tergantung repo utama Armbian
 
       - name: Cek hasil build
         run: |
