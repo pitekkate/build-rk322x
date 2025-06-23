@@ -39,14 +39,47 @@ jobs:
           repository: pitekkate/build-rk322x
           ref: hk1mini
 
+      - name: Buat direktori config jika belum ada
+        run: |
+          mkdir -p config/targets
+
+      - name: Cek apakah hk1mini.conf ada
+        id: check_conf
+        run: |
+          if [ -f config/targets/hk1mini.conf ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Buat hk1mini.conf secara otomatis jika tidak ada
+        if: steps.check_conf.outputs.exists == 'false'
+        run: |
+          cat > config/targets/hk1mini.conf <<EOL
+BOARD=hk1mini
+RELEASE=${{ inputs.os_release }}
+BUILD_MINIMAL=no
+BUILD_DESKTOP=no
+CUSTOMIZE_IMAGE=yes
+IMAGE_SIZE=1GB
+EOL
+
       - name: Set OS Release di config/targets/hk1mini.conf
         run: |
-          sed -i "s/RELEASE=.*/RELEASE=${{ inputs.os_release }}/g" config/targets/hk1mini.conf || echo "RELEASE=${{ inputs.os_release }}" >> config/targets/hk1mini.conf
+          if grep -q "^RELEASE=" config/targets/hk1mini.conf; then
+            sed -i "s/^RELEASE=.*/RELEASE=${{ inputs.os_release }}/" config/targets/hk1mini.conf
+          else
+            echo "RELEASE=${{ inputs.os_release }}" >> config/targets/hk1mini.conf
+          fi
 
       - name: Set BUILD_DESKTOP based on input
         if: ${{ inputs.build_desktop == 'yes' }}
         run: |
-          sed -i "s/BUILD_DESKTOP=no/BUILD_DESKTOP=yes/g" config/targets/hk1mini.conf || echo "BUILD_DESKTOP=yes" >> config/targets/hk1mini.conf
+          if grep -q "^BUILD_DESKTOP=" config/targets/hk1mini.conf; then
+            sed -i "s/^BUILD_DESKTOP=no/BUILD_DESKTOP=yes/" config/targets/hk1mini.conf
+          else
+            echo "BUILD_DESKTOP=yes" >> config/targets/hk1mini.conf
+          fi
 
       - name: Setup Environment untuk Build Armbian
         uses: armbian/build@main
