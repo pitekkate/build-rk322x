@@ -5,11 +5,27 @@ on:
     inputs:
       kernel_branch:
         type: choice
-        description: 'Pilih versi kernel yang akan dibangun'
+        description: 'Pilih versi kernel'
         options:
           - current
           - legacy
         default: current
+      os_release:
+        type: choice
+        description: 'Pilih rilis Ubuntu/Debian'
+        options:
+          - jammy
+          - noble
+          - focal
+          - bookworm
+        default: noble
+      build_desktop:
+        type: choice
+        description: 'Aktifkan build Desktop Environment?'
+        options:
+          - yes
+          - no
+        default: no
 
 jobs:
   build:
@@ -23,17 +39,24 @@ jobs:
           repository: pitekkate/build-rk322x
           ref: hk1mini
 
+      - name: Set OS Release di config/targets/hk1mini.conf
+        run: |
+          sed -i "s/RELEASE=.*/RELEASE=${{ inputs.os_release }}/g" config/targets/hk1mini.conf || echo "RELEASE=${{ inputs.os_release }}" >> config/targets/hk1mini.conf
+
+      - name: Set BUILD_DESKTOP based on input
+        if: ${{ inputs.build_desktop == 'yes' }}
+        run: |
+          sed -i "s/BUILD_DESKTOP=no/BUILD_DESKTOP=yes/g" config/targets/hk1mini.conf || echo "BUILD_DESKTOP=yes" >> config/targets/hk1mini.conf
+
       - name: Setup Environment untuk Build Armbian
         uses: armbian/build@main
         with:
           armbian_token: "${{ secrets.GITHUB_TOKEN }}"
-          armbian_release: noble
           armbian_target: image
           armbian_board: hk1mini
           armbian_kernel_branch: ${{ inputs.kernel_branch }}
-          armbian_build_minimal: "yes"
-          armbian_build_desktop: "no"
-          armbian_customize_image: "yes"
+          armbian_release: ${{ inputs.os_release }}
+          armbian_branch: master
 
       - name: Cek hasil build
         run: |
