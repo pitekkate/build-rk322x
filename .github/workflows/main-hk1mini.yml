@@ -1,0 +1,47 @@
+name: Manual Build - Armbian hk1mini
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_branch:
+        type: choice
+        description: 'Pilih versi kernel yang akan dibangun'
+        options:
+          - current
+          - legacy
+        default: current
+
+jobs:
+  build:
+    name: Build Image Armbian
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout kode repo
+        uses: actions/checkout@v4
+        with:
+          repository: pitekkate/build-rk322x
+          ref: hk1mini
+
+      - name: Setup Environment untuk Build Armbian
+        uses: armbian/build@main
+        with:
+          armbian_token: "${{ secrets.GITHUB_TOKEN }}"
+          armbian_release: noble
+          armbian_target: image
+          armbian_board: hk1mini
+          armbian_kernel_branch: ${{ inputs.kernel_branch }}
+          armbian_build_minimal: "yes"
+          armbian_build_desktop: "no"
+          armbian_customize_image: "yes"
+
+      - name: Cek hasil build
+        run: |
+          ls -la output/images/
+
+      - name: Upload ke GitHub Release
+        if: success()
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "output/images/*.img.xz"
+          token: ${{ secrets.GITHUB_TOKEN }}
