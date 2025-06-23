@@ -19,20 +19,34 @@ jobs:
     steps:
       - name: Checkout kode repo
         uses: actions/checkout@v4
-        with:
-          repository: pitekkate/build-rk322x
-          ref: hk1mini
 
-      - name: Setup Environment untuk Build Armbian
-        uses: armbian/build@main
-        with:
-          armbian_token: "${{ secrets.GITHUB_TOKEN }}"
-          armbian_release: noble
-          armbian_target: image
-          armbian_board: hk1mini
-          armbian_kernel_branch: ${{ inputs.kernel_branch }}
-          # Tambahkan opsi lain jika perlu
-          armbian_branch: master  # atau main, tergantung repo utama Armbian
+      - name: Setup Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git build-essential libncurses5-dev flex bison libssl-dev ccache libelf-dev
+
+      - name: Clone Armbian Build Framework
+        run: |
+          git clone https://github.com/armbian/build 
+          cd build
+
+      - name: Configure non-interactive build
+        run: |
+          cd build
+          # Salin config contoh sebagai dasar
+          cp userpatches/config-example.conf userpatches/myconfig.conf
+
+          # Ubah config untuk disable interaktif dan set opsi build
+          echo "BOARD=hk1mini" >> userpatches/myconfig.conf
+          echo "RELEASE=noble" >> userpatches/myconfig.conf
+          echo "BUILD_MINIMAL=no" >> userpatches/myconfig.conf
+          echo "BUILD_DESKTOP=no" >> userpatches/myconfig.conf
+          echo "KERNELBRANCH=${{ inputs.kernel_branch }}" >> userpatches/myconfig.conf
+
+      - name: Jalankan Proses Build
+        run: |
+          cd build
+          ./compile.sh BOARD=hk1mini RELEASE=noble BUILD_MINIMAL=no BUILD_DESKTOP=no
 
       - name: Cek hasil build
         run: |
