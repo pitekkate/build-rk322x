@@ -29,19 +29,20 @@ jobs:
         run: |
           git clone https://github.com/armbian/build 
           cd build
+          ls -la
 
       - name: Configure non-interactive build
         run: |
           cd build
-          # Salin config contoh sebagai dasar
-          cp userpatches/config-example.conf userpatches/myconfig.conf
 
-          # Ubah config untuk disable interaktif dan set opsi build
-          echo "BOARD=hk1mini" >> userpatches/myconfig.conf
-          echo "RELEASE=noble" >> userpatches/myconfig.conf
-          echo "BUILD_MINIMAL=no" >> userpatches/myconfig.conf
-          echo "BUILD_DESKTOP=no" >> userpatches/myconfig.conf
-          echo "KERNELBRANCH=${{ inputs.kernel_branch }}" >> userpatches/myconfig.conf
+          # Buat file konfigurasi baru secara manual
+          cat <<EOT > userpatches/myconfig.conf
+BOARD=hk1mini
+RELEASE=noble
+BUILD_MINIMAL=no
+BUILD_DESKTOP=no
+KERNELBRANCH=${{ inputs.kernel_branch }}
+EOT
 
       - name: Jalankan Proses Build
         run: |
