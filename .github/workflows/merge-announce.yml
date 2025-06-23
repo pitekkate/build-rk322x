@@ -1,113 +1,20 @@
-name: Manual Build - Armbian hk1mini
+name: "Announce PR merge to Discord"
 
 on:
-  workflow_dispatch:
-    inputs:
-      kernel_branch:
-        type: choice
-        description: 'Pilih versi kernel'
-        options:
-          - current
-          - legacy
-        default: current
-      os_release:
-        type: choice
-        description: 'Pilih rilis Ubuntu/Debian'
-        options:
-          - jammy
-          - noble
-          - focal
-          - bookworm
-        default: noble
-      build_type:
-        type: choice
-        description: 'Pilih tipe build'
-        options:
-          - minimal
-          - desktop
-        default: minimal
+  push:
+    branches: [ main ]
 
 jobs:
-  build:
-    name: Build Image Armbian
+  announcepush:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout kode repo
+      - name: Get repo
         uses: actions/checkout@v4
         with:
-          repository: pitekkate/build-rk322x
-          ref: hk1mini
-
-      - name: Buat direktori config jika belum ada
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Send push to Discord
         run: |
-          mkdir -p config/targets
-
-      - name: Cek apakah file konfigurasi target tersedia
-        id: check_conf
-        run: |
-          if [ "${{ inputs.build_type }}" == "desktop" ]; then
-            TARGET_CONF="hk1mini-desktop.conf"
-          else
-            TARGET_CONF="hk1mini.conf"
-          fi
-
-          if [ -f config/targets/$TARGET_CONF ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "target_conf=$TARGET_CONF" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "target_conf=$TARGET_CONF" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Buat file konfigurasi otomatis jika tidak ada
-        if: steps.check_conf.outputs.exists == 'false'
-        run: |
-          TARGET_CONF=${{ steps.check_conf.outputs.target_conf }}
-
-          cat > config/targets/$TARGET_CONF <<EOL
-BOARD=hk1mini
-RELEASE=${{ inputs.os_release }}
-BUILD_MINIMAL=no
-BUILD_DESKTOP=no
-CUSTOMIZE_IMAGE=yes
-IMAGE_SIZE=1GB
-KERNEL_TARGET=${{ inputs.kernel_branch }}
-ENABLE_ROOT=true
-ENABLE_E2FSCK=y
-DISABLE_ROOT_RESIZE=false
-CLEAN_LEVEL="make,debs"
-EOL
-
-          # Jika build desktop, aktifkan BUILD_DESKTOP dan tambahkan DE
-          if [ "${{ inputs.build_type }}" == "desktop" ]; then
-            echo "BUILD_DESKTOP=yes" >> config/targets/$TARGET_CONF
-            echo "DESKTOP_ENVIRONMENT=xfce" >> config/targets/$TARGET_CONF
-            echo "IMAGE_SIZE=2GB" >> config/targets/$TARGET_CONF
-          fi
-
-      - name: Gunakan file konfigurasi yang dipilih
-        run: |
-          TARGET_CONF=${{ steps.check_conf.outputs.target_conf }}
-          cp config/targets/$TARGET_CONF config/targets/hk1mini.conf
-
-      - name: Setup Environment untuk Build Armbian
-        uses: armbian/build@main
-        with:
-          armbian_token: "${{ secrets.GITHUB_TOKEN }}"
-          armbian_target: image
-          armbian_board: hk1mini
-          armbian_kernel_branch: ${{ inputs.kernel_branch }}
-          armbian_release: ${{ inputs.os_release }}
-          armbian_branch: master
-
-      - name: Cek hasil build
-        run: |
-          ls -la output/images/
-
-      - name: Upload ke GitHub Release
-        if: success()
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "output/images/*.img.xz"
-          token: ${{ secrets.GITHUB_TOKEN }}
+          curl -i -H "Accept: application/json" -H "Content-Type: application/json" -X POST --data \
+          "{\"username\": \"Github\", \"avatar_url\": \"${{ secrets.AVATARURL }}\", \"content\": \"\
+          :white_check_mark: **Merged** into [$GITHUB_REPOSITORY](<$GITHUB_SERVER_URL/$GITHUB_REPOSITORY>) by [$GITHUB_ACTOR](<$GITHUB_SERVER_URL/$GITHUB_ACTOR>) - \
+          [Link](<$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA>): *$(git show -s --format=%s)*\"}" ${{ secrets.WEBHOOKURL }}
