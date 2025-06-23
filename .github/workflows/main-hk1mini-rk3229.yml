@@ -86,11 +86,6 @@ jobs:
             echo "IMAGE_SIZE=2GB" >> config/targets/$TARGET_CONF
           fi
 
-      - name: Gunakan file konfigurasi yang dipilih
-        run: |
-          TARGET_CONF=${{ steps.check_conf.outputs.target_conf }}
-          cp config/targets/$TARGET_CONF config/targets/hk1mini.conf
-
       - name: Setup Environment untuk Build Armbian
         uses: armbian/build@main
         with:
