@@ -19,13 +19,13 @@ on:
           - focal
           - bookworm
         default: noble
-      build_desktop:
+      build_type:
         type: choice
-        description: 'Aktifkan build Desktop Environment?'
+        description: 'Pilih tipe build'
         options:
-          - yes
-          - no
-        default: no
+          - minimal
+          - desktop
+        default: minimal
 
 jobs:
   build:
@@ -43,43 +43,53 @@ jobs:
         run: |
           mkdir -p config/targets
 
-      - name: Cek apakah hk1mini.conf ada
+      - name: Cek apakah file konfigurasi target tersedia
         id: check_conf
         run: |
-          if [ -f config/targets/hk1mini.conf ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.build_type }}" == "desktop" ]; then
+            TARGET_CONF="hk1mini-desktop.conf"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            TARGET_CONF="hk1mini.conf"
           fi
 
-      - name: Buat hk1mini.conf secara otomatis jika tidak ada
+          if [ -f config/targets/$TARGET_CONF ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "target_conf=$TARGET_CONF" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "target_conf=$TARGET_CONF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Buat file konfigurasi otomatis jika tidak ada
         if: steps.check_conf.outputs.exists == 'false'
         run: |
-          cat > config/targets/hk1mini.conf <<EOL
+          TARGET_CONF=${{ steps.check_conf.outputs.target_conf }}
+
+          cat > config/targets/$TARGET_CONF <<EOL
 BOARD=hk1mini
 RELEASE=${{ inputs.os_release }}
 BUILD_MINIMAL=no
 BUILD_DESKTOP=no
 CUSTOMIZE_IMAGE=yes
 IMAGE_SIZE=1GB
+KERNEL_TARGET=${{ inputs.kernel_branch }}
+ENABLE_ROOT=true
+ENABLE_E2FSCK=y
+DISABLE_ROOT_RESIZE=false
+CLEAN_LEVEL="make,debs"
 EOL
 
-      - name: Set OS Release di config/targets/hk1mini.conf
-        run: |
-          if grep -q "^RELEASE=" config/targets/hk1mini.conf; then
-            sed -i "s/^RELEASE=.*/RELEASE=${{ inputs.os_release }}/" config/targets/hk1mini.conf
-          else
-            echo "RELEASE=${{ inputs.os_release }}" >> config/targets/hk1mini.conf
+          # Jika build desktop, aktifkan BUILD_DESKTOP dan tambahkan DE
+          if [ "${{ inputs.build_type }}" == "desktop" ]; then
+            echo "BUILD_DESKTOP=yes" >> config/targets/$TARGET_CONF
+            echo "DESKTOP_ENVIRONMENT=xfce" >> config/targets/$TARGET_CONF
+            echo "IMAGE_SIZE=2GB" >> config/targets/$TARGET_CONF
           fi
 
-      - name: Set BUILD_DESKTOP based on input
-        if: ${{ inputs.build_desktop == 'yes' }}
+      - name: Gunakan file konfigurasi yang dipilih
         run: |
-          if grep -q "^BUILD_DESKTOP=" config/targets/hk1mini.conf; then
-            sed -i "s/^BUILD_DESKTOP=no/BUILD_DESKTOP=yes/" config/targets/hk1mini.conf
-          else
-            echo "BUILD_DESKTOP=yes" >> config/targets/hk1mini.conf
-          fi
+          TARGET_CONF=${{ steps.check_conf.outputs.target_conf }}
+          cp config/targets/$TARGET_CONF config/targets/hk1mini.conf
 
       - name: Setup Environment untuk Build Armbian
         uses: armbian/build@main
