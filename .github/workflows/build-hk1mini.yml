@@ -1,0 +1,41 @@
+name: "Build Armbian for hk1mini"
+
+on:
+  workflow_dispatch:
+    inputs:
+      armbian_kernel_branch:
+        type: choice
+        description: 'Select Kernel Branch (current / legacy)'
+        options:
+          - current
+          - legacy
+        default: current
+
+jobs:
+  build-armbian:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          repository: pitekkate/build-rk322x
+          ref: hk1mini
+
+      - name: Setup Armbian Build Environment
+        uses: armbian/build@main
+        with:
+          armbian_token: "${{ secrets.GITHUB_TOKEN }}"
+          armbian_release: noble
+          armbian_target: image
+          armbian_board: hk1mini
+          armbian_kernel_branch: ${{ inputs.armbian_kernel_branch }}
+          armbian_build_minimal: "yes"
+          armbian_build_desktop: "no"
+          armbian_customize_image: "yes"
+
+      - name: Upload Image to Release
+        if: success()
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "output/images/*.img.xz"
+          token: ${{ secrets.GITHUB_TOKEN }}
